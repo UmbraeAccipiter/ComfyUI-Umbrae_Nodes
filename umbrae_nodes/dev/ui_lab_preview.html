@@ -1,0 +1,31 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>umbrae ui lab</title>
+<style>
+  body { margin:0; padding:20px; background:#1b1b1b; color:#ccc; font-family:system-ui,sans-serif; }
+  h1 { font-size:14px; font-weight:600; margin:0 0 4px; }
+  p  { font-size:12px; color:#888; margin:0 0 16px; }
+  .row { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; }
+  .col { width:300px; }
+  .cap { font-size:12px; color:#aaa; margin-bottom:6px; }
+  /* stand-in for a ComfyUI node: title bar + body */
+  .node { border-radius:8px; overflow:hidden; box-shadow:0 2px 8px #0008; background:#2a2a2a; }
+  .node .bar { background:#353535; padding:5px 10px; font-size:12px; color:#ddd; }
+  .node.skin .bar { background:#1d1d1d; }
+  .node.skin { background:#2a2a2a; }
+</style></head>
+<body>
+<h1>umbrae UI lab</h1>
+<p>Same controls built three ways. Dev only - this page is a stand-in for ComfyUI's node frame.</p>
+<div class="row" id="row"></div>
+<script type="module">
+  import { VARIANTS } from "../web/ui_lab_panels.js";
+  const row = document.getElementById("row");
+  for (const v of VARIANTS) {
+    const col = document.createElement("div"); col.className = "col";
+    const cap = document.createElement("div"); cap.className = "cap"; cap.textContent = v.title;
+    const node = document.createElement("div"); node.className = "node" + (v.key === "skinned" ? " skin" : "");
+    const bar = document.createElement("div"); bar.className = "bar"; bar.textContent = "ui lab node";
+    node.append(bar, v.build());
+    col.append(cap, node); row.append(col);
+  }
+</script></body></html>

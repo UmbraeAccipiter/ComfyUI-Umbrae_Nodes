@@ -1,0 +1,225 @@
+=====================================================================
+ WILDCARD PROCESSOR [UMBRAE] - SYNTAX CHEAT SHEET  (v0.8.6)
+=====================================================================
+
+Wildcard files are read from:
+  1. umbrae_nodes/wildcards/          (wins if a name exists in both)
+  2. Impact Pack's custom wildcards folder
+Press "Refresh Wildcards" on the node after editing files.
+
+
+---------------------------------------------------------------------
+ BASICS  (same as Impact)
+---------------------------------------------------------------------
+  __name__                 random line from name.txt
+                           subfolder:  __folder/name__
+                           YAML key:   __file/key__
+  __col*__  __*/name__     pattern match across files / any depth
+
+  {a|b|c}                  random pick each run
+  {2::a|b|0.5::c}          weighted pick  (N:: = weight)
+
+  {2$$a|b|c}               pick 2, joined by a space
+  {1-3$$a|b|c}             pick 1 to 3
+  {-3$$a|b|c}              pick up to 3
+  {2$$, $$a|b|c}           pick 2, joined by ", "
+  {3$$$, $ and $$__x__}    "x, y and z"  (last pair uses " and ")
+  {2$$__file__}            pick 2 lines from a file
+
+  {2$$3#__name__}          3#__name__ = three copies of __name__ as
+                           options, so picks can repeat ("red red").
+                           Outside { } it leaves literal | characters.
+
+  # some line              comment (line removed)
+  \{  \}                   literal braces
+  \n                       line break in the output (also inside
+                           wildcard file lines).  \\n = literal \n
+  \&                       literal &
+  \!                       literal !
+
+
+---------------------------------------------------------------------
+ SWITCHES
+ A switch stores a number; every {&name:...} group picks that
+ option (counting from 1), so separate groups stay consistent.
+---------------------------------------------------------------------
+  {&gend=2}                define switch gend = 2 (removed from the
+                           output; can sit anywhere in the text)
+  {&gend={1|2}}            random value, picked once per run, the
+                           same in every group
+  {&gend={-::1^2}}         alternates 1, 2, 1, ... across runs
+  {&gend:him|her}          option 2 -> "her"
+  {&gend:{his|their}|her}  nested groups inside an option still work
+
+  switches box (on the node):
+    gend=2, hair=4    or    {&gend=2}{&hair=4}    or any mix
+    (commas or new lines). Overrides same-named definitions in the
+    prompt. Connect one text node to several processors to keep
+    them all in agreement.
+
+  - Out of range (including 0) -> last option + warning.
+  - Undefined name or non-number value -> one random option is
+    picked for that name (using the first group's N:: weights) and
+    every group with that name uses it, so they stay consistent.
+    A warning is logged when you press Run, so you can cancel
+    before generating.
+  - No count (2$$) or -:: / +:: prefix inside a switch group;
+    N:: weights are ignored when the switch is defined.
+  - Box typed, or connected from a Primitive / plain text node:
+    resolved when you press Run. Connected from a node that
+    computes text: resolved when the node executes
+    (populated_text still shows the groups; the fallback and its
+    warning also happen then).
+
+  Example:
+    box:     {&gend=2}{&hair=4}
+    prompt:  {&gend=1}1{&gend:boy|girl}, {&hair:black|blond|brown|red} hair
+    output:  1girl, red hair
+
+
+---------------------------------------------------------------------
+ OVERRIDES
+ An override beats every ordinary definition of the same name - in
+ the prompt or inside any wildcard file - wherever it sits.
+---------------------------------------------------------------------
+  {@!fcolor1=@fcolor2}     variable override: fcolor1 takes
+                           fcolor2's value, even when a wildcard
+                           file defines both
+  {@!fcolor1={teal|olive}} any variable value works: text, {a|b},
+                           __file__, #a
+  {&!gend=2}               switch override: beats {&gend=...} in
+                           the prompt or in files
+
+  - Switch priority: switches box > {&!...} > {&...}.
+  - The same override defined twice: the later one wins (+warning).
+  - A reference to a variable that is never defined is left as-is.
+
+  Example:
+    file:    {@fcolor1={blue|navy}}{@fcolor2={red|crimson|scarlet}}
+             a {@fcolor1} shirt with {@fcolor2} trim
+    prompt:  {@!fcolor1=@fcolor2} __outfit__
+    output:  a red shirt with red trim
+
+
+---------------------------------------------------------------------
+ TEXT REPLACEMENT
+ Runs LAST. Whole words / phrases only ("there" is never touched by
+ her). All replacements happen in one pass: swaps work, nothing is
+ replaced twice.
+---------------------------------------------------------------------
+  {!she=he}                any case matches; case follows the text:
+                           she -> he, She -> He, SHE -> HE
+  {!!She=Mary}             exact case only: replaces "She", leaves
+                           "she" and "SHE"; inserted as written
+  {!her=him}{!him=her}     swap
+  {!long red hair=short black hair}
+                           phrases work
+  {!cat={dog|fox}}         replacement may contain syntax,
+                           resolved once per run
+
+  Case rules for !:
+    all lowercase      -> lowercase
+    First capitalised  -> First capitalised
+    ALL CAPS           -> ALL CAPS
+    Every Word Capped  -> Every Word Capped (phrases)
+    anything mixed     -> as written
+  Note: a lowercase match lowercases the replacement, so
+  {!she=Mary} turns "she" into "mary" - use {!!she=Mary} for names.
+
+  - !! beats ! on the same word; a longer phrase beats a shorter one.
+  - Can sit in the prompt or in a wildcard file. Same find defined
+    twice: the later one wins (+warning). Removed from the output.
+
+
+---------------------------------------------------------------------
+ VARIABLES
+---------------------------------------------------------------------
+  {@hero=__emotions__}     define once; resolved once per run
+  {@hero}   or   @hero     reuse the same value
+  {@b=#a}                  pick from a's original list, excluding a
+  {@c=#a,#b}               ... excluding a and b
+
+
+---------------------------------------------------------------------
+ PERSISTENT SELECTION
+ Remembered between runs. Cleared by the "Reset cycles & counter"
+ button or a ComfyUI restart.
+---------------------------------------------------------------------
+  {a^b^c}                  shuffled bag: every item once before any
+                           repeat
+  {-::a^b^c}               written order: a, b, c, a, b, ...
+  {-::__file__}            written order through a file's lines
+
+  {+::a|b|c}               random, never the same item twice in a row
+  {3+::a|b|c|d|e}          random, none of the last 3 items used
+  {3$$3+::a|b|...|j}       3 per run, none of the previous run's 3
+  {2+::a^b^c^d}            shuffled bag; a new bag never starts with
+                           any of the last 2 items
+  {2+::__file__}           no-repeat pick from a file
+
+ NOT persistent (this run only):
+  {-::a|b|c}               always the first item -> "a"
+  {2$$-::a|b|c}            first 2 in written order -> "a b"
+
+
+---------------------------------------------------------------------
+ PREFIX RULES  (-::  and  N+::)
+---------------------------------------------------------------------
+  - Goes right after "{", or right after the count part
+    (2$$  /  2$$, $$  /  3$$$, $ and $$).
+  - One prefix per group.
+  - \+::  and  \-::  are plain text, not prefixes.
+  - Weights (N::) still count with +::, are ignored with -::.
+  - If the history would leave too few choices, it forgets the
+    oldest entries first. It never errors and never returns nothing.
+  - The pick happens when the run is QUEUED.
+  - A nested random group, e.g. {2+::a|{b|c}}, starts a fresh
+    history whenever the inner pick changes.
+
+
+---------------------------------------------------------------------
+ NODE CONTROLS
+---------------------------------------------------------------------
+  mode
+    populate   fills populated_text when you press Run
+               (read-only, but you can select and copy it)
+    fixed      uses populated_text exactly as written
+    reproduce  pick by hand: uses populated_text once, then
+               switches back to populate
+
+  Loading an image
+    The node comes back in populate mode, so it regenerates from
+    wildcard_text. The image's exact prompt is shown in
+    populated_text - copy it before running, or switch to fixed
+    to re-create it exactly.
+
+  seed connected to a node that computes it
+    The prompt is resolved when the node runs (populated_text
+    updates then; a warning is logged).
+
+  runs
+    Queue the workflow X times. The next run is queued only after
+    the previous one finishes. Cancel / interrupt / error stops the
+    series; switching workflow tabs mid-run also stops it.
+    Outputs: run_index (1..X) and runs_remaining.
+    Do NOT also set ComfyUI's batch count - they multiply.
+
+  Reset cycles & counter
+    Restarts this node's bags, orders, histories and countdown.
+    Stopping a series does NOT reset these - press Reset.
+
+  switches
+    Switch values - see SWITCHES.
+
+  Refresh Wildcards
+    Reloads wildcard files from disk.
+
+
+---------------------------------------------------------------------
+ EXAMPLE: 28 expressions, one each, in list order, then stop
+---------------------------------------------------------------------
+  1. Put emotions.txt in umbrae_nodes/wildcards/,
+     one expression per line.
+  2. wildcard_text = {-::__emotions__}
+  3. runs = 28
+  4. Press "Reset cycles & counter", then press Run once.
