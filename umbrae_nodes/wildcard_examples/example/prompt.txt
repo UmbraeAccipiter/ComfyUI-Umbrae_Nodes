@@ -1,0 +1,4 @@
+# full template lines. Try: __example/prompt__  (connect the latent to the node so [[aspect]] knows the size; set runs > 1 and watch the cycles)
+{&time={1|2|3|4}}{@main=__example/colors__}A photo of __example/animals__ wearing a @main scarf, __example/scene__. [[aspect]]
+{&time=3}{@main=__example/colors__}{@trim=#main}A painting of __example/animals__, @main and @trim tones, __example/scene__. [[aspect]]
+{!cat=fox}A sketch of __example/animals__ on a {-::rainy^snowy^windy} day, __example/scene__. [[aspect]]

@@ -1,0 +1,5 @@
+# lines may contain syntax: nested groups and other wildcards resolve too
+a {sleepy|curious} cat
+a {small|large} dog with a __example/colors__ collar
+a red panda
+an owl perched on a branch

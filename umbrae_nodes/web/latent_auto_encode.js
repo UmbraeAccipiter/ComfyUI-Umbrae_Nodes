@@ -1,15 +1,14 @@
 import { app } from "../../scripts/app.js";
 import { buildScaleSection } from "./umbrae_scale.js";
 import { measureRootContent, attachAutoHeight, applyAdaptiveCanvasOnly } from "./umbrae_resize.js";
-import { injectTheme } from "./umbrae_theme.js";
-import { makeNum, makeChips, makeToggle, subLabel as sub } from "./umbrae_panel_controls.js";
+import { injectTheme, applyNodeColors } from "./umbrae_theme.js";
+import { createNumber, createPillRow, createToggle, createLabel as sub } from "./umbrae_components.js";
 
 const NODE_TYPE = "LatentAutoEncode";
 
 function setupNode(node) {
     injectTheme();
-    if (!node.bgcolor) node.bgcolor = "#2a2a2a";
-    if (!node.color) node.color = "#1f1f1f";
+    applyNodeColors(node);
 
     function getState() { return node.properties?.laeState ?? {}; }
     function syncStateWidget() {
@@ -26,35 +25,35 @@ function setupNode(node) {
     }
 
     const st = getState();
-    const root = document.createElement("div"); root.className = "cir-root";
+    const root = document.createElement("div"); root.className = "ud-root ud-ruled";
 
     // ── Generate (used only when no image/latent is wired) ─────────────────────
-    const genLabel = document.createElement("div"); genLabel.className = "cir-label"; genLabel.textContent = "Generate (no image / latent)";
-    const genChips = makeChips([{ val: "empty", label: "Empty (t2i)" }, { val: "noise", label: "Random noise" }],
+    const genLabel = document.createElement("div"); genLabel.className = "ud-title"; genLabel.textContent = "Generate (no image / latent)";
+    const genChips = createPillRow([{ val: "empty", label: "Empty (t2i)" }, { val: "noise", label: "Random noise" }],
         st.gen_mode ?? "empty", v => { setState({ gen_mode: v }); renderGen(); });
     [...genChips.el.children].forEach((b, i) => {
         b.title = i === 0
             ? "Empty latent (zeros) — the normal t2i case; the sampler adds noise from its own seed."
             : "Seeded random-noise latent — niche; for samplers that take pre-made noise.";
     });
-    const seedNum = makeNum(st.seed ?? 0, 0, 1e15, 1, v => setState({ seed: v }));
-    const seedWrap = document.createElement("div"); seedWrap.append(sub("Seed (for random noise)"), seedNum.wrap);
+    const seedNum = createNumber(st.seed ?? 0, 0, 1e15, 1, v => setState({ seed: v }));
+    const seedWrap = document.createElement("div"); seedWrap.append(sub("Seed (for random noise)"), seedNum.el);
     const genSec = document.createElement("div"); genSec.append(genLabel, genChips.el, seedWrap);
     function renderGen() { seedWrap.style.display = (getState().gen_mode ?? "empty") === "noise" ? "" : "none"; scheduleResize(); }
 
     // ── Size (target W/H; overridden by the width/height inputs) ────────────────
-    const sizeLabel = document.createElement("div"); sizeLabel.className = "cir-label"; sizeLabel.textContent = "Size";
-    const whRow = document.createElement("div"); whRow.className = "cir-pad-row";
-    const wNum = makeNum(st.width ?? 1024, 8, 16384, 8, v => setState({ width: v }));
-    const hNum = makeNum(st.height ?? 1024, 8, 16384, 8, v => setState({ height: v }));
-    whRow.append(wNum.wrap, hNum.wrap);
+    const sizeLabel = document.createElement("div"); sizeLabel.className = "ud-title"; sizeLabel.textContent = "Size";
+    const whRow = document.createElement("div"); whRow.className = "ud-padrow";
+    const wNum = createNumber(st.width ?? 1024, 8, 16384, 8, v => setState({ width: v }));
+    const hNum = createNumber(st.height ?? 1024, 8, 16384, 8, v => setState({ height: v }));
+    whRow.append(wNum.el, hNum.el);
     const sizeSec = document.createElement("div"); sizeSec.append(sizeLabel, sub("Width · Height (inputs override these)"), whRow);
 
     // ── Sigmas (Flux2 schedule, split on denoise) ──────────────────────────────
-    const sigLabel = document.createElement("div"); sigLabel.className = "cir-label"; sigLabel.textContent = "Sigmas (Flux2)";
-    const stepsNum = makeNum(st.steps ?? 20, 1, 4096, 1, v => setState({ steps: v }));
-    const stepsWrap = document.createElement("div"); stepsWrap.append(sub("Steps"), stepsNum.wrap);
-    const halfChips = makeChips(
+    const sigLabel = document.createElement("div"); sigLabel.className = "ud-title"; sigLabel.textContent = "Sigmas (Flux2)";
+    const stepsNum = createNumber(st.steps ?? 20, 1, 4096, 1, v => setState({ steps: v }));
+    const stepsWrap = document.createElement("div"); stepsWrap.append(sub("Steps"), stepsNum.el);
+    const halfChips = createPillRow(
         [{ val: "low", label: "Low" }, { val: "high", label: "High" }],
         st.sigmas_half ?? "low", v => { setState({ sigmas_half: v }); scheduleResize(); });
     [...halfChips.el.children].forEach((b, i) => {
@@ -68,12 +67,12 @@ function setupNode(node) {
         halfChips.el);
 
     // ── Resize image before encode (crop_core scale panel) ─────────────────────
-    const resizeToggle = makeToggle(st.resize_on === true, "Resize image before encode: On", "Resize image before encode: Off",
+    const resizeToggle = createToggle(st.resize_on === true, "Resize image before encode: On", "Resize image before encode: Off",
         v => { setState({ resize_on: v }); renderResize(); });
     resizeToggle.el.title = "When an image is wired, run it through the resize settings below before VAE-encoding. A wired latent is cropped (never scaled) to the target W/H.";
     const { root: scaleRoot, refresh: refreshScale } = buildScaleSection(
         node, () => getState(), (_n, p) => setState(p),
-        { showUniform: false, seedDefaults: true, onChange: () => scheduleResize(), isBboxConnected: () => false });
+        { showUniform: false, seedDefaults: true, onChange: () => scheduleResize(), isBboxConnected: () => false, hideModes: ["BBOX"] });
     const resizeSec = document.createElement("div"); resizeSec.append(resizeToggle.el, scaleRoot);
     function renderResize() { scaleRoot.style.display = (getState().resize_on === true) ? "" : "none"; scheduleResize(); }
 

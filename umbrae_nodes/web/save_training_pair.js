@@ -1,5 +1,9 @@
 import { app } from "../../scripts/app.js";
+import { requestAdvance, currentJobPos } from "./umbrae_loop.js";
 
+// save training pair [umbrae]: every execution asks the shared loop controller
+// (umbrae_loop.js) to advance the batch loader. The step happens once per
+// finished run, no matter how many iteration nodes the graph has.
 app.registerExtension({
     name: "UNP.SaveTrainingPair",
     async beforeRegisterNodeDef(nodeType, nodeData) {
@@ -7,38 +11,23 @@ app.registerExtension({
         const _oe = nodeType.prototype.onExecuted;
         nodeType.prototype.onExecuted = function(message) {
             _oe?.apply(this, arguments);
-
-            const count = app._unpBatchFileCount ?? 0;
-            if (count <= 0) return;
-
-            const loader = app.graph?._nodes?.find(n =>
-                n.type === "LoadImagesUniformBatch" ||
-                n.comfyClass === "LoadImagesUniformBatch" ||
-                n.properties?.lbuState !== undefined
-            );
-            if (!loader) return;
-
-            const idxWidget = loader.widgets?.find(w => w.name === "image_index");
-            if (!idxWidget) return;
-
-            // Use app-level counter, but sync from widget if user changed it manually
-            const widgetVal = parseInt(idxWidget.value) || 0;
-            if (app._unpCurrentIndex === undefined || widgetVal !== app._unpCurrentIndex)
-                app._unpCurrentIndex = widgetVal;
-            const current = app._unpCurrentIndex;
-
-            if (current >= count - 1) {
-                app._unpCurrentIndex = 0;
-                idxWidget.value = 0;
-                app._unpNextImageIndex = 0;
-                app._unpBatchFileCount = 0;
-                return;
-            }
-
-            app._unpCurrentIndex = current + 1;
-            app._unpNextImageIndex = current + 1;
-            idxWidget.value = current + 1;
-            setTimeout(() => app.queuePrompt(0, 1), 300);
+            requestAdvance();
         };
     },
 });
+
+// Hidden ui_state: where this prompt sits in the loader job, so the Python
+// side knows when to restart (overwrite on) or continue (off) its numbering.
+const _origGTP = app.graphToPrompt.bind(app);
+app.graphToPrompt = async function(...args) {
+    const result = await _origGTP(...args);
+    const out = result?.output;
+    if (!out) return result;
+    for (const id in out) {
+        const entry = out[id];
+        if (!entry || entry.class_type !== "SaveTrainingPair") continue;
+        entry.inputs = entry.inputs || {};
+        entry.inputs.ui_state = JSON.stringify({ job_pos: currentJobPos() });
+    }
+    return result;
+};

@@ -1,0 +1,9 @@
+# one expression per line - used by the "28 runs in order" example in umbrae_wildcard_syntax.md
+a calm, neutral expression
+a gentle smile
+a wide grin
+a thoughtful frown
+raised eyebrows in surprise
+a quiet, contented look
+a focused, determined stare
+a soft, sleepy expression

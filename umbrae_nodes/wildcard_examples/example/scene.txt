@@ -1,0 +1,4 @@
+# switch used INSIDE a file: {&time:...} follows the prompt's {&time=N} (or picks one value per run if undefined)
+in a sunlit meadow, {&time:morning haze|midday light|golden hour|moonlight}
+on a quiet city street, {&time:early morning|noon|dusk|night}
+by a lake, {&time:dawn mist|bright noon|sunset glow|starlight}

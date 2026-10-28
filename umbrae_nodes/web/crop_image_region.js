@@ -1,8 +1,9 @@
 import { app } from "../../scripts/app.js";
+import { requestAdvance } from "./umbrae_loop.js";
 import { buildScaleSection } from "./umbrae_scale.js";
 import { measureRootContent, attachAutoHeight, applyAdaptiveCanvasOnly } from "./umbrae_resize.js";
-import { injectTheme } from "./umbrae_theme.js";
-import { makeNum, makeChips, makeToggle, makeText } from "./umbrae_panel_controls.js";
+import { injectTheme, applyNodeColors } from "./umbrae_theme.js";
+import { createNumber, createPillRow, createToggle, createText, createLabel } from "./umbrae_components.js";
 
 const NODE_TYPE = "CropImageRegion";
 const ACCENT    = "#7aa8d4";
@@ -61,8 +62,7 @@ function installResizeFloor(root) {
 // ── Node setup ────────────────────────────────────────────────────────────────
 function setupNode(node) {
     injectTheme();
-    if (!node.bgcolor) node.bgcolor = "#2a2a2a";
-    if (!node.color) node.color = "#1f1f1f";
+    applyNodeColors(node);
 
     function getState() { return node.properties?.cirState ?? {}; }
     function setState(patch) {
@@ -72,7 +72,7 @@ function setupNode(node) {
 
     const st = getState();
     const root = document.createElement("div");
-    root.className = "cir-root";
+    root.className = "ud-root ud-ruled";
 
     // ── Scaling (shared module, identical across all three nodes) ──────────────
     const sharedGetState = () => getState();
@@ -86,7 +86,7 @@ function setupNode(node) {
         node,
         sharedGetState,
         sharedPatchState,
-        { showUniform: false, onChange: () => scheduleResize(), isBboxConnected: isBboxOverrideConnected }
+        { showUniform: false, onChange: () => scheduleResize(), isBboxConnected: isBboxOverrideConnected, hideModes: ["BBOX"] }
     );
     const mSec = document.createElement("div");
     mSec.append(scaleRoot);
@@ -100,60 +100,69 @@ function setupNode(node) {
 
     // ── Padding ────────────────────────────────────────────────────────────────
     const pLabel = document.createElement("div");
-    pLabel.className = "cir-label";
+    pLabel.className = "ud-title";
     pLabel.textContent = "Padding";
 
-    const pNum = makeNum(st.padding ?? 10, 0, 500, 1,
+    const pNum = createNumber(st.padding ?? 10, 0, 500, 1,
         v => setState({ padding: v }));
-    pNum.wrap.className += " cir-pad-inp";
+    pNum.el.className += " ud-grow";
 
-    const uChips = makeChips([
+    const uChips = createPillRow([
         { val: "pixels",     label: "px" },
         { val: "percentage", label: "%" },
     ], st.padding_unit ?? "percentage", v => setState({ padding_unit: v }));
-    uChips.el.className = "cir-unit";
+    uChips.el.className = "ud-unit";
 
     const pRow = document.createElement("div");
-    pRow.className = "cir-pad-row";
-    pRow.append(pNum.wrap, uChips.el);
+    pRow.className = "ud-padrow";
+    pRow.append(pNum.el, uChips.el);
 
     const pSec = document.createElement("div");
     pSec.append(pLabel, pRow);
 
     // ── Save ──────────────────────────────────────────────────────────────────
     const saveLabel = document.createElement("div");
-    saveLabel.className = "cir-label";
+    saveLabel.className = "ud-title";
     saveLabel.textContent = "Save";
 
     const saveFields = document.createElement("div");
-    saveFields.className = "cir-save-fields";
+    saveFields.className = "ud-stack";
 
-    const folderInp = makeText(st.output_folder ?? "cropped_images", "Output folder",
+    const folderInp = createText(st.output_folder ?? "cropped_images", "Output folder",
         v => setState({ output_folder: v }));
 
     const fmtLabel = document.createElement("div");
-    fmtLabel.className = "cir-label";
+    fmtLabel.className = "ud-title";
     fmtLabel.textContent = "Format";
-    const fmtChips = makeChips([
+    const fmtChips = createPillRow([
         { val: "png",  label: "png"  },
         { val: "jpg",  label: "jpg"  },
         { val: "webp", label: "webp" },
-    ], st.format ?? "png", v => { setState({ format: v }); renderMaskSection(); });
+    ], st.format ?? "png", v => { setState({ format: v }); renderQuality(); renderMaskSection(); });
+    const qualityNum = createNumber(st.quality ?? 95, 1, 100, 1, v => setState({ quality: v }),
+        { tooltip: "JPG / WebP quality (1-100). Higher = larger file, fewer artifacts. Ignored for PNG." });
+    const qualityWrap = document.createElement("div");
+    qualityWrap.append(createLabel("Quality (JPG / WebP)"), qualityNum.el);
+    function renderQuality(relayout = true) {
+        qualityWrap.style.display = (getState().format ?? "png") === "png" ? "none" : "";
+        if (relayout) scheduleResize();
+    }
     const fmtSec = document.createElement("div");
-    fmtSec.append(fmtLabel, fmtChips.el);
+    fmtSec.append(fmtLabel, fmtChips.el, qualityWrap);
+    renderQuality(false);
 
     const nameRow = document.createElement("div");
-    nameRow.className = "cir-text-row";
-    const prefixInp = makeText(st.prefix ?? "", "prefix", v => setState({ prefix: v }));
-    const suffixInp = makeText(st.suffix ?? "", "suffix", v => setState({ suffix: v }));
+    nameRow.className = "ud-padrow";
+    const prefixInp = createText(st.prefix ?? "", "prefix", v => setState({ prefix: v }));
+    const suffixInp = createText(st.suffix ?? "", "suffix", v => setState({ suffix: v }));
     nameRow.append(prefixInp.el, suffixInp.el);
 
-    const overwriteToggle = makeToggle(st.overwrite !== false, "Overwrite: On", "Overwrite: Off",
+    const overwriteToggle = createToggle(st.overwrite !== false, "Overwrite: On", "Overwrite: Off",
         v => setState({ overwrite: v }));
 
     saveFields.append(folderInp.el, fmtSec, nameRow, overwriteToggle.el);
 
-    const saveToggle = makeToggle(st.save_image !== false, "Save Image: On", "Save Image: Off", v => {
+    const saveToggle = createToggle(st.save_image !== false, "Save Image: On", "Save Image: Off", v => {
         setState({ save_image: v });
         saveFields.style.display = v ? "" : "none";
         scheduleResize();
@@ -169,10 +178,10 @@ function setupNode(node) {
         return idx >= 0 && node.inputs?.[idx]?.link != null;
     }
     const maskLabel = document.createElement("div");
-    maskLabel.className = "cir-label";
+    maskLabel.className = "ud-title";
     maskLabel.textContent = "Mask";
 
-    const interpChips = makeChips([
+    const interpChips = createPillRow([
         { val: "nearest",  label: "Nearest"  },
         { val: "bilinear", label: "Bilinear" },
     ], st.mask_interpolation ?? "nearest", v => setState({ mask_interpolation: v }));
@@ -182,7 +191,7 @@ function setupNode(node) {
             : "Bilinear — smooth interpolation; preserves soft / feathered mask edges.";
     });
 
-    const maskJpgToggle = makeToggle(st.mask_force_jpg === true, "Mask: force JPG", "Mask: PNG (safe)",
+    const maskJpgToggle = createToggle(st.mask_force_jpg === true, "Mask: force JPG", "Mask: PNG (safe)",
         v => setState({ mask_force_jpg: v }));
     maskJpgToggle.el.title = "When the image saves as JPG: keep the mask as lossless PNG (safe default), "
         + "or force JPG to match the image (lossy — can fuzz mask edges/values).";
@@ -202,10 +211,10 @@ function setupNode(node) {
     // Independent of Save Image — lets a node opt in/out of the multi-instance
     // completion count without that being tied to whether it writes a file.
     const iterLabel = document.createElement("div");
-    iterLabel.className = "cir-label";
+    iterLabel.className = "ud-title";
     iterLabel.textContent = "Iteration";
 
-    const iterToggle = makeToggle(st.iterate !== false, "Counts Toward Completion: On",
+    const iterToggle = createToggle(st.iterate !== false, "Counts Toward Completion: On",
         "Counts Toward Completion: Off", v => setState({ iterate: v }));
     iterToggle.el.title = "When on, this node is one of the instances the batch loader "
         + "waits for before advancing to the next image. Turn off for a node that "
@@ -281,58 +290,15 @@ app.registerExtension({
             setupNode(this);
         };
 
-        // Every CropImageRegion instance with "Counts Toward Completion" on
-        // reports in here when it executes. Only once all of them have
-        // reported in for this run does the batch loader actually advance —
-        // so wiring three of these (face/body/feature) to the same loader
-        // still advances exactly one step per source image, not three. This
-        // is independent of whether the instance actually saved a file.
+        // Every instance with "Counts Toward Completion" on asks umbrae_loop.js
+        // for a step; the step happens once per finished run, so three of
+        // these (face/body/feature) still advance exactly one source image.
+        // Independent of whether the instance actually saved a file.
         const _oe = nodeType.prototype.onExecuted;
         nodeType.prototype.onExecuted = function(message) {
             _oe?.apply(this, arguments);
-
             if (this.properties?.cirState?.iterate === false) return;
-
-            const expected = (app.graph?._nodes ?? []).filter(n =>
-                (n.type === NODE_TYPE || n.comfyClass === NODE_TYPE) &&
-                n.properties?.cirState?.iterate !== false
-            ).length;
-            if (expected <= 0) return;
-
-            app._unpCropCompleted = (app._unpCropCompleted ?? 0) + 1;
-            if (app._unpCropCompleted < expected) return;
-            app._unpCropCompleted = 0;
-
-            const count = app._unpBatchFileCount ?? 0;
-            if (count <= 0) return;
-
-            const loader = app.graph?._nodes?.find(n =>
-                n.type === "LoadImagesUniformBatch" ||
-                n.comfyClass === "LoadImagesUniformBatch" ||
-                n.properties?.lbuState !== undefined
-            );
-            if (!loader) return;
-
-            const idxWidget = loader.widgets?.find(w => w.name === "image_index");
-            if (!idxWidget) return;
-
-            const widgetVal = parseInt(idxWidget.value) || 0;
-            if (app._unpCurrentIndex === undefined || widgetVal !== app._unpCurrentIndex)
-                app._unpCurrentIndex = widgetVal;
-            const current = app._unpCurrentIndex;
-
-            if (current >= count - 1) {
-                app._unpCurrentIndex = 0;
-                idxWidget.value = 0;
-                app._unpNextImageIndex = 0;
-                app._unpBatchFileCount = 0;
-                return;
-            }
-
-            app._unpCurrentIndex = current + 1;
-            app._unpNextImageIndex = current + 1;
-            idxWidget.value = current + 1;
-            setTimeout(() => app.queuePrompt(0, 1), 300);
+            requestAdvance();
         };
     },
 });

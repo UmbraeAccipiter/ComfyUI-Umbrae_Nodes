@@ -7,7 +7,7 @@
  *   B → [input fn] ↗
  */
 
-import { injectTheme } from "./umbrae_theme.js";
+import { injectTheme, applyNodeColors } from "./umbrae_theme.js";
 import { app } from "../../scripts/app.js";
 import { measureRootContent, attachAutoHeight, applyAdaptiveCanvasOnly } from "./umbrae_resize.js";
 
@@ -32,7 +32,7 @@ function makeVariants(hex) {
 function getTypeColors() {
     if (_typeColorCache) return _typeColorCache;
     const FB = { INT:"#3d87d4", FLOAT:"#9aab89", STRING:"#6ab150" };
-    const c  = { OFF:{ border:"#2e2e2e", text:"#666", bg:"#252525", dot:"#555" } };
+    const c  = { OFF:{ border:"var(--ud-border)", text:"var(--ud-text-dim)", bg:"var(--ud-inset)", dot:"var(--ud-text-dim)" } };
     for (const t of ["INT","FLOAT","STRING"]) {
         let color = null;
         if (typeof LiteGraph !== "undefined")
@@ -135,8 +135,8 @@ function injectCSS() {
 .unp-m-chip:hover { color:var(--ud-text) }
 .unp-m-chip.on { border-color:var(--ud-accent); background:var(--ud-accent); color:#fff; font-weight:600 }
 .unp-m-val { display:flex; align-items:center; gap:5px }
-.unp-m-sep-above { border-top:1px solid #303030; padding-top:6px; margin-top:6px }
-.unp-m-sep-below { border-bottom:1px solid #303030; padding-bottom:6px; margin-bottom:6px }
+.unp-m-sep-above { border-top:1px solid var(--ud-divider); padding-top:6px; margin-top:6px }
+.unp-m-sep-below { border-bottom:1px solid var(--ud-divider); padding-bottom:6px; margin-bottom:6px }
 .unp-m-vl  { font-size:9px; color:var(--ud-text-dim); width:22px; flex-shrink:0 }
 .unp-m-inp { flex:1; background:var(--ud-inset); border:1px solid var(--ud-border); border-radius:4px;
              padding:3px 6px; font-size:11px; color:var(--ud-text); font-family:monospace; outline:none; min-width:0 }
@@ -149,15 +149,15 @@ function injectCSS() {
 .unp-m-fn-chip  { padding:3px 7px; border-radius:4px; border:1px solid var(--ud-border); background:var(--ud-inset);
                   color:var(--ud-text-dim); font-size:10px; cursor:pointer; user-select:none; transition:all .12s }
 .unp-m-fn-chip:hover { color:var(--ud-text) }
-.unp-m-fn-chip.on { border-color:var(--ud-accent); color:var(--ud-accent); background:#16242f }
+.unp-m-fn-chip.on { border-color:var(--ud-accent); color:#fff; font-weight:600; background:var(--ud-accent) }
 .unp-m-fn-div   { width:1px; background:var(--ud-border); height:14px; margin:0 1px; flex-shrink:0 }
 .unp-m-op-grid  { display:flex; gap:4px; flex-wrap:wrap; align-items:center }
 .unp-m-op { padding:4px 8px; border-radius:4px; border:1px solid var(--ud-border); background:var(--ud-inset);
-            color:#999; font-size:11px; cursor:pointer; user-select:none; transition:all .12s }
+            color:var(--ud-text-dim); font-size:11px; cursor:pointer; user-select:none; transition:all .12s }
 .unp-m-op:hover { color:var(--ud-text) }
-.unp-m-op.on    { border-color:var(--ud-accent); color:var(--ud-accent); background:#16242f }
+.unp-m-op.on    { border-color:var(--ud-accent); color:#fff; font-weight:600; background:var(--ud-accent) }
 .unp-m-div  { width:1px; background:var(--ud-border); height:16px; margin:0 2px; flex-shrink:0 }
-.unp-m-sub  { background:#1a1a1a; border-radius:4px; padding:6px 7px; margin-top:6px; border:1px solid #2e2e2e }
+.unp-m-sub  { background:color-mix(in srgb, var(--ud-inset) 80%, #000); border-radius:4px; padding:6px 7px; margin-top:6px; border:1px solid var(--ud-divider) }
 .unp-m-slbl { font-size:9px; color:var(--ud-text-dim); margin-bottom:4px; letter-spacing:.04em }
 .unp-m-sc   { display:flex; gap:3px; flex-wrap:wrap }
 .unp-m-sc .unp-m-chip { font-size:9px; padding:2px 6px }
@@ -169,16 +169,16 @@ function injectCSS() {
 .unp-m-adv-tog  { display:flex; align-items:center; gap:5px; font-size:9px; font-weight:700; color:var(--ud-accent);
                   text-transform:uppercase; letter-spacing:.07em; cursor:pointer; padding:6px 0 0;
                   border-top:1px solid var(--ud-divider); user-select:none }
-.unp-m-adv-tog:hover { color:#9cc0e4 }
+.unp-m-adv-tog:hover { color:var(--ud-accent-hover) }
 .unp-m-adv-body { margin-top:7px; display:flex; flex-direction:column; gap:7px }
 .unp-m-adv-row  { display:flex; align-items:center; gap:6px }
 .unp-m-adv-lbl  { font-size:10px; color:var(--ud-text-dim); width:72px; flex-shrink:0 }
 .unp-m-tog { width:30px; height:16px; border-radius:8px; background:var(--ud-inset); border:1px solid var(--ud-border);
              position:relative; flex-shrink:0; cursor:pointer; transition:all .15s }
-.unp-m-tog.on { background:#16242f; border-color:var(--ud-accent) }
-.unp-m-tog-dot { width:12px; height:12px; border-radius:50%; background:#666;
+.unp-m-tog.on { background:var(--ud-accent); border-color:var(--ud-accent) }
+.unp-m-tog-dot { width:12px; height:12px; border-radius:50%; background:var(--ud-text-dim);
                  position:absolute; top:1px; left:1px; transition:all .15s }
-.unp-m-tog.on .unp-m-tog-dot { background:var(--ud-accent); left:15px }
+.unp-m-tog.on .unp-m-tog-dot { background:#fff; left:15px }
     `;
     document.head.appendChild(s);
 }
@@ -275,8 +275,7 @@ function buildClampPanel(state, prefix, onPick) {
 
 function setupMathNode(node) {
     injectCSS();
-    if (!node.bgcolor) node.bgcolor = "#2a2a2a";
-    if (!node.color) node.color = "#1f1f1f";
+    applyNodeColors(node);
     const root = el("div","unp-m");
 
     // A section: chips → value(below) → fn row
@@ -381,12 +380,12 @@ function setupMathNode(node) {
             chips.querySelectorAll(".unp-m-chip").forEach(c=>{
                 const ct=c.dataset.t, isOn=ct===norm;
                 const colors=TC[ct==="STR"?"STRING":ct]||TC.OFF;
-                c.style.borderColor=isOn?colors.border:"#333";
-                c.style.color=isOn?colors.text:"#666";
-                c.style.background=isOn?colors.bg:"#252525";
+                c.style.borderColor=isOn?colors.border:"var(--ud-border)";
+                c.style.color=isOn?colors.text:"var(--ud-text-dim)";
+                c.style.background=isOn?colors.bg:"var(--ud-inset)";
             });
             const fc=TC[norm==="STR"?"STRING":norm]||TC.OFF;
-            wrap.style.border="none"; wrap.style.borderLeft=norm==="OFF"?"2px solid #333":`2px solid ${fc.dot}`; wrap.style.paddingLeft="7px";
+            wrap.style.border="none"; wrap.style.borderLeft=norm==="OFF"?"2px solid var(--ud-border)":`2px solid ${fc.dot}`; wrap.style.paddingLeft="7px";
             valRow.style.display=norm!=="OFF"?"":"none";
             if(norm!=="OFF"){
                 const colors=TC[activeType==="STRING"?"STRING":activeType]||TC.OFF;

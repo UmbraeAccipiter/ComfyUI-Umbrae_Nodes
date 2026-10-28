@@ -1,10 +1,14 @@
 =====================================================================
- WILDCARD PROCESSOR [UMBRAE] - SYNTAX CHEAT SHEET  (v0.8.6)
+ WILDCARD PROCESSOR [UMBRAE] - SYNTAX CHEAT SHEET  (v0.9.4)
 =====================================================================
 
-Wildcard files are read from:
-  1. umbrae_nodes/wildcards/          (wins if a name exists in both)
+Wildcard files are read from (priority order - a higher source wins):
+  1. umbrae_nodes/wildcards/          (your files)
   2. Impact Pack's custom wildcards folder
+  3. umbrae_nodes/wildcard_examples/  (shipped: aspect defaults + syntax
+                                       examples; replaced on every update -
+                                       copy a file into wildcards/ under the
+                                       same path to edit it)
 Press "Refresh Wildcards" on the node after editing files.
 
 
@@ -13,7 +17,13 @@ Press "Refresh Wildcards" on the node after editing files.
 ---------------------------------------------------------------------
   __name__                 random line from name.txt
                            subfolder:  __folder/name__
-                           YAML key:   __file/key__
+                           YAML key:   __key/subkey__
+  __name.txt__             same as __name__ (.txt / .yaml ignored)
+  __folder/__              one line from EVERY file under folder/
+                           (also what __folder__ does when there is
+                           no folder.txt)   -> RELATIVE TAGS & FOLDERS
+  __./name__  __../name__  inside a wildcard file: name next to this
+                           file / one folder up -> RELATIVE TAGS & FOLDERS
   __col*__  __*/name__     pattern match across files / any depth
 
   {a|b|c}                  random pick each run
@@ -36,6 +46,55 @@ Press "Refresh Wildcards" on the node after editing files.
                            wildcard file lines).  \\n = literal \n
   \&                       literal &
   \!                       literal !
+
+
+---------------------------------------------------------------------
+ RELATIVE TAGS & FOLDERS  (v0.8.8)
+ Wildcard files can refer to each other without the full path from
+ the wildcard root, so a pack keeps working when its folder is
+ renamed or moved.
+---------------------------------------------------------------------
+  (inside a wildcard file)
+  __./face__               face.txt (or face/) in the SAME folder as
+                           the file containing the line
+  __../scene__             scene.txt one folder UP (__../../x__ = two)
+  __./outfit/__            every file under the outfit/ folder next
+                           to this file
+  __./person/jim.txt__     extensions are allowed and ignored
+
+  Resolved when the file is LOADED (press Refresh Wildcards after
+  moving files).  wildcards/CivitBobWildcrd/templates/main.txt with
+  __../person/jim__ reaches wildcards/CivitBobWildcrd/person/jim.txt
+  whatever the pack folder is called.
+  YAML files: counted from the folder the .yaml file sits in.
+  Typed in the prompt box (no file to count from): ./ = the wildcard
+  root, so __./x__ is just __x__.
+
+  FOLDER CALLS
+  __person/outfit__ with no outfit.txt pools every line of every file
+  under person/outfit/ and picks one (a 50-line file gets 50 chances,
+  a 2-line file gets 2).  __person/outfit/__ (trailing slash) forces
+  the folder even when outfit.txt exists; without it the file wins.
+
+  RECURSION
+  A file may call itself or its own folder.  A line already in use
+  further up the same branch is never picked again, so recursion ends
+  by itself instead of repeating one line until the 100-pass limit.
+  If every line of a tag is already in use, the tag is removed and a
+  warning is logged.
+      story.txt:   hero, __./story__
+                   villain, __./story__
+                   the end.
+      __story__  ->  "hero, villain, the end."  /  "the end."  / ...
+
+  EXAMPLE LAYOUT  (shipped: wildcard_examples/example/portrait/,
+                   call it with __example/portrait/portrait__)
+      example/scene.txt
+      example/portrait/portrait.txt
+          a portrait of someone with __./face__, __./outfit/__, __../scene__
+      example/portrait/face.txt
+      example/portrait/outfit/casual.txt
+      example/portrait/outfit/formal.txt
 
 
 ---------------------------------------------------------------------
@@ -100,6 +159,39 @@ Press "Refresh Wildcards" on the node after editing files.
     prompt:  {@!fcolor1=@fcolor2} __outfit__
     output:  a red shirt with red trim
 
+  PROTECTED OPTIONS AND =r=  (v0.8.9)
+  Mark options in a file's definition with -=...=- ; an @! override
+  then only touches the others.  One pair may wrap several options.
+  {@shade=-=light=-|dark|-=bright=-|dull}   light, bright protected
+  {@shade=-=light|dark|deep=-|rich|bright}  one pair, three protected
+  {@!shade=shining}        PER DRAW: every unprotected option becomes
+                           shining (own weight kept); it shows only when
+                           such an option is drawn.  Other odds unchanged.
+  {@!shade=r=shining}      REPLACE FIRST: all unprotected options become
+                           ONE shining entry before the draw, with the
+                           highest weight of those it replaced.
+  Example, 7 options, 3 protected: plain = shining 4 in 7, r = 1 in 4.
+  - No protected option: both forms replace the whole value (as before).
+  - The file's definition must be a plain a|b|c list.
+  - Protected text is also shielded from {!..} replacements.
+
+
+---------------------------------------------------------------------
+ PINS  (v0.8.9)     {&=CHOICE:TARGET}
+ Force a choice without editing any file.
+---------------------------------------------------------------------
+  {&=2:@gend}              variable gend takes its 2nd option
+  {&=red:__fabric_colors__}  every draw from fabric_colors takes the
+                           first line containing "red"
+  {&=1:him|her}            every group with exactly the options
+                           him|her (any case) takes option 1
+  CHOICE: number = Nth option / line; text = first option / line that
+  contains the word.  No match: warning + normal random draw.
+  Short tag names match like normal tags.  Pins beat random picks;
+  @! and &! overrides still win; anything inside {-=..=-} is skipped.
+  Work in the prompt and in files; removed from the output.  Not read
+  from the switches box.
+
 
 ---------------------------------------------------------------------
  TEXT REPLACEMENT
@@ -111,6 +203,10 @@ Press "Refresh Wildcards" on the node after editing files.
                            she -> he, She -> He, SHE -> HE
   {!!She=Mary}             exact case only: replaces "She", leaves
                            "she" and "SHE"; inserted as written
+  {!!!mod=LoRa}            any case matches (mod, Mod, MOD, mOd); the
+                           replacement is inserted exactly as written
+  {!!!!mod=LoRa}           exact case only, inserted as written; same
+                           as {!!mod=LoRa} (alias)
   {!her=him}{!him=her}     swap
   {!long red hair=short black hair}
                            phrases work
@@ -126,9 +222,31 @@ Press "Refresh Wildcards" on the node after editing files.
   Note: a lowercase match lowercases the replacement, so
   {!she=Mary} turns "she" into "mary" - use {!!she=Mary} for names.
 
-  - !! beats ! on the same word; a longer phrase beats a shorter one.
+  - Flags: !  any case in, case follows out   !! / !!!!  exact case
+    in, as written out   !!!  any case in, as written out.
+  - !! beats the others on the same word; then a longer phrase wins;
+    then !!! beats !.
   - Can sit in the prompt or in a wildcard file. Same find defined
     twice: the later one wins (+warning). Removed from the output.
+
+  PROTECTED TEXT  (v0.8.9)
+  {-=man=-}                the text is written as-is; NO {!..} / {!!..}
+                           replacement touches it.  The {-= =-} wrapper
+                           is removed.
+  - Contents still resolve first ({-=a {red|blue} man=-},
+    {-=__./who__=-}); only the replacement step skips them.
+  - With {!man=woman} in the prompt, "the man" -> "the woman" but
+    {-=man=-} stays "man" (mannequin, fixed title, quoted word).
+  - Works in the prompt and in wildcard file lines.
+
+  GENDERED WILDCARD TEXT
+  Write gendered words once as switches, set the gender in one place:
+      {&gend:he|she} wears {&gend:his|her} jacket   (in a wildcard file)
+      {&gend=2}                                     (prompt / switches box)
+      {&!gend=1}                                    (override)
+  Keep option order the same everywhere (1 = male, 2 = female).  A
+  single-gender line can skip the switch and be flipped with
+  {!she=he}; wrap words that must never flip in {-=...=-}.
 
 
 ---------------------------------------------------------------------
@@ -178,6 +296,92 @@ Press "Refresh Wildcards" on the node after editing files.
 
 
 ---------------------------------------------------------------------
+ ASPECT RATIO  (v0.8.7)
+---------------------------------------------------------------------
+  The node reads the image size from the workflow and adapts the text
+  to it. Connect the LATENT the image is made from (or width + height
+  ints) to the node's inputs; nothing needs typing.
+
+  [[aspect]]               inserts a description of the connected image's
+                           orientation on its own line: one random line
+                           from __aspect/[orientation]__, i.e.
+                           aspect/horizontal, aspect/vertical or
+                           aspect/square. Defaults ship in
+                           wildcard_examples/aspect/; copy one into
+                           wildcards/aspect/ to edit it
+  [orientation]            token -> horizontal / vertical / square (W = H)
+  [ratio]                  token -> nearest common ratio of the connected
+                           size, e.g. 1328x752 -> 16:9 (exact fraction
+                           when none is within 3 %)
+  [width]  [height]        token -> the connected pixel size
+  [3:4]                    typed override, used only when nothing is
+                           connected; removed from the output.
+                           [[3:4]] = request + override in one
+
+  - Tokens are filled last, anywhere: prompt and wildcard file lines.
+    Unknown [words] are left as typed.
+  - W > H horizontal, W < H vertical, W = H square.
+  - Requests work wherever they appear (switch option, variable, file line).
+  - Inside the lines of aspect/*.txt write [orientation] for the word
+    ("The crop is [orientation]"). A [[aspect]] there is read as
+    [orientation] too, so it never nests another line (v0.8.9).
+  - The size is often only known when the node runs (a latent, or a
+    width/height computed by another node). Then [[aspect]] and the tokens
+    stay as typed in populated_text at queue time and are resolved during
+    the run; populated_text is updated afterwards.
+  - Nothing connected and no typed override: [[aspect]] inserts nothing
+    and the tokens use 1:1 (warning logged).
+  - Missing aspect wildcard: nothing inserted (warning logged).
+
+
+---------------------------------------------------------------------
+ SYNTAX COLOURS  (v0.9.4)
+---------------------------------------------------------------------
+  The wildcard_text box colours its syntax as you type, so wildcards,
+  variables and brackets stand out. It only changes how the text is
+  drawn - the prompt itself is never touched. populated_text is not
+  coloured.
+
+  __name__             tag: the name and its __ ends are two blues; a
+                       tag that matches no wildcard turns red
+  {@x}  @x             variable; an override {@!x} has its own colour
+  {&x}                 switch; an override {&!x} and a pin {&=2:x}
+                       each have their own colour
+  {!a=b}               replacement (also {!!a=b} {!!!a=b} {!!!!a=b})
+  {-=x=-}              protected text
+  [[aspect]]  [ratio]  aspect request and tokens
+  2::  2$$  -::  +::   weights, counts and persistent prefixes
+  |  ^                 option separators
+  \{  \n               escapes (literal text)
+  # line               comment line
+
+  - A brace takes the colour of its group's kind ({@x} orange, {&x}
+    violet ...). Plain {a|b} groups cycle four colours by nesting
+    depth. Closing braces are coloured like their opener (setting).
+  - Options inside a group: every second option gets another colour
+    (default). Setting: alternate / none / cycle (4 colours) / tint
+    (background).
+  - Caret touching a { } brace: its partner lights up. Caret inside a
+    tag, variable or switch: every other use of that name lights up.
+  - Red is used only for warnings: an unmatched { or }, an unmatched
+    [[ or ]], and a __tag__ that matches no wildcard.
+  - The unknown-tag check asks the server how the engine would
+    resolve the tag (relative and folder tags included; patterns with
+    * are not checked) and follows Refresh Wildcards within a few
+    seconds.
+  - Settings -> Umbrae -> WildcardHighlight: on / off, colour
+    closers, partner on caret, same-name highlight, unknown-tag
+    warning, option mode, "Reset all colours to" dark or light, and
+    one colour picker per category.
+  - Default: dark palette (light tones for dark mode). Choose light
+    to reset every picker to the dark-tone palette for a light theme.
+    Colours are shared by every wildcard processor.
+  - If the colours ever fail to line up with the text box they switch
+    themselves off for that box (a warning appears in the browser
+    console) and the plain box is restored.
+
+
+---------------------------------------------------------------------
  NODE CONTROLS
 ---------------------------------------------------------------------
   mode
@@ -204,6 +408,23 @@ Press "Refresh Wildcards" on the node after editing files.
     Outputs: run_index (1..X) and runs_remaining.
     Do NOT also set ComfyUI's batch count - they multiply.
 
+  Search wildcards...   (v0.8.9)
+    Popup that filters the whole list as you type (every word must
+    match the name or folder).  Click ticks several entries; Enter
+    inserts the ticked ones (or the highlighted one) into
+    wildcard_text.  Ticks stay while you change the search.  The
+    right side previews the first lines of the highlighted wildcard.
+    YAML wildcards are listed under their file's folder.
+
+  Preview prompt   (v0.8.9)
+    Resolves the current wildcard_text with the node's seed and
+    switches without running.  Roll again = next seed.  Never
+    advances the node's ^ / -:: / +:: cycles.
+
+  switches box
+    Keeps a small fixed height, so a taller node gives its room to
+    the prompt boxes.
+
   Reset cycles & counter
     Restarts this node's bags, orders, histories and countdown.
     Stopping a series does NOT reset these - press Reset.
@@ -218,7 +439,8 @@ Press "Refresh Wildcards" on the node after editing files.
 ---------------------------------------------------------------------
  EXAMPLE: 28 expressions, one each, in list order, then stop
 ---------------------------------------------------------------------
-  1. Put emotions.txt in umbrae_nodes/wildcards/,
+  1. emotions.txt (a short one ships in wildcard_examples/; your own
+     copy in umbrae_nodes/wildcards/ replaces it),
      one expression per line.
   2. wildcard_text = {-::__emotions__}
   3. runs = 28

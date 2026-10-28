@@ -3,8 +3,9 @@
 // serialized to the hidden ui_state input via the graphToPrompt hook. All
 // ui_state keys are identical to the previous version.
 import { app } from "../../scripts/app.js";
+import { requestAdvance, findLoader, currentJobPos } from "./umbrae_loop.js";
 import { buildScaleSection } from "./umbrae_scale.js";
-import { injectTheme } from "./umbrae_theme.js";
+import { injectTheme, applyNodeColors } from "./umbrae_theme.js";
 import {
     createSection, createDivider, createPillRow, createToggle,
     createNumber, createText, createRow, createInfo,
@@ -13,16 +14,35 @@ import { measureRootContent, attachAutoHeight, applyAdaptiveCanvasOnly } from ".
 
 const NODE_TYPE = "SaveImageSmart";
 
+// Pre-template workflows: rename_mode / base_name / rename_pattern / auto_index
+// -> filename_template / number_files / digits. Mirrors _migrate_naming() in
+// the Python so the panel shows what the server will do.
+function migrateNaming(node) {
+    const s = node.properties?.sisState;
+    if (!s || s.filename_template !== undefined) return;
+    const mode = s.rename_mode ?? "pattern";
+    let tpl;
+    if (mode === "source_stem") tpl = "{stem}";
+    else if (mode === "base_stem") tpl = s.base_name || "image";
+    else tpl = s.rename_pattern || "{stem}";
+    const patch = { filename_template: tpl };
+    if (s.auto_index !== undefined && s.number_files === undefined) patch.number_files = s.auto_index !== false;
+    if (s.auto_index_pad !== undefined && s.digits === undefined) patch.digits = s.auto_index_pad;
+    if (/\{(i|z\d+|seq|zseq\d+)\}/.test(tpl)) patch.number_files = false;
+    node.properties.sisState = { ...s, ...patch };
+}
+
 function setupNode(node) {
     injectTheme();
-    if (!node.bgcolor) node.bgcolor = "#2a2a2a";
-    if (!node.color) node.color = "#1f1f1f";
+    applyNodeColors(node);
 
     function getState() { return node.properties?.sisState ?? {}; }
     function setState(patch) {
         if (!node.properties) node.properties = {};
         node.properties.sisState = { ...getState(), ...patch };
     }
+    // Workflows saved before the single-template naming: derive it once.
+    migrateNaming(node);
     const st = getState();
 
     const root = document.createElement("div");
@@ -77,38 +97,39 @@ function setupNode(node) {
                      "format conversion that keeps the original generation history.",
         });
 
-    const renameSec = createSection("Rename Mode", { tooltip: "How output filenames are built." });
-    const rename = createPillRow(
-        [{ val: "source_stem", label: "Source Stem" }, { val: "base_stem", label: "Base Stem" }, { val: "pattern", label: "Pattern" }],
-        st.rename_mode ?? "pattern", (v) => { setState({ rename_mode: v }); renderSave(); },
-        { tooltip: "Source Stem reuses the input filename; Base Stem uses Base Name; Pattern uses the template below." });
-    renameSec.body.appendChild(rename.el);
-
-    const baseName = createText(st.base_name ?? "image", "Base name",
-        (v) => setState({ base_name: v }), { tooltip: "Base filename used by Base Stem / {base}." });
-    const pattern = createText(st.rename_pattern ?? "myset",
-        "Pattern — {i} {z3} {stem} {base} {model} {date} …", (v) => setState({ rename_pattern: v }),
-        {
-            tooltip: "Filename template. Index tokens: {i} {z3} {seq} {zseq3} {stem} {base}. " +
-                     "Metadata tokens: {model} {diffusion_model} {checkpoint} {seed} {steps} {cfg} " +
-                     "{sampler} {scheduler} {denoise} {vae} {clip} {lora} {upscale_model} " +
-                     "{controlnet} {loaded_image} {width} {height} {size}. Multi-instance workflows: " +
-                     "append a number — {model2} = refiner's model (samplers in execution order), " +
-                     "{lora2}, {clip2}, etc. (loaders in graph order); bare = first. Date/time: " +
-                     "{date} = YYYY-MM-DD, {date:YY-MM-DD}, {time} = 24h HH-MM-SS, {time:12:HH-MM-SS} " +
-                     "appends -AM/-PM. Missing metadata becomes unknown-<name>-. Metadata comes from " +
-                     "the wired metadata input, the source file, or the live workflow, in that priority.",
+    const nameSec = createSection("Filename", {
+        tooltip: "One template + numbering + overwrite. Same scheme as Save Training Pair.",
+    });
+    const tmpl = createText(st.filename_template ?? "{stem}", "{stem}",
+        (v) => setState({ filename_template: v }), {
+            tooltip: "Name template. {stem} = source filename without extension (blank when nothing " +
+                     "is wired). {n} places the number ({n4} = 4 digits); without it the number is " +
+                     "appended as _{n}. Metadata tokens: {model} {diffusion_model} {checkpoint} {seed} " +
+                     "{steps} {cfg} {sampler} {scheduler} {denoise} {vae} {clip} {lora} {upscale_model} " +
+                     "{controlnet} {loaded_image} {width} {height} {size}; {model2} {lora2} … for " +
+                     "further instances. Date/time: {date} = YYYY-MM-DD, {date:YY-MM-DD}, {time} = " +
+                     "HH-MM-SS, {time:12:HH-MM-SS}. Missing metadata becomes unknown-<name>-. An " +
+                     "empty result saves as the number alone.",
         });
+    nameSec.body.appendChild(tmpl.el);
 
-    const seqNum = createNumber(st.sequence_index ?? 0, 0, 999999, 1, (v) => setState({ sequence_index: v }),
-        { tooltip: "Value substituted for {seq}/{zseq}." });
-    const seqRow = createRow("Sequence", seqNum, { grow: true });
-
-    const autoIdx = createToggle(st.auto_index !== false, "Auto Index: On", "Auto Index: Off",
-        (v) => { setState({ auto_index: v }); renderSave(); }, { tooltip: "Append an incrementing number so files never overwrite." });
-    const padNum = createNumber(st.auto_index_pad ?? 3, 1, 8, 1, (v) => setState({ auto_index_pad: v }),
-        { tooltip: "Zero-pad width of the auto index (e.g. 3 → 007)." });
-    const padRow = createRow("Index Padding", padNum, { grow: true });
+    const numToggle = createToggle(st.number_files !== false, "Number Files: On", "Number Files: Off",
+        (v) => { setState({ number_files: v }); renderSave(); }, {
+            tooltip: "Every saved file gets a number that counts up through a batch-loader job " +
+                     "(or one queue press without a loader).",
+        });
+    const startNum = createNumber(st.start_index ?? 0, 0, 999999999, 1, (v) => setState({ start_index: v }),
+        { tooltip: "First number of a job." });
+    const startRow = createRow("Start at", startNum, { grow: true });
+    const digitsNum = createNumber(st.digits ?? 4, 1, 8, 1, (v) => setState({ digits: v }),
+        { tooltip: "Zero padding (4 -> 0007)." });
+    const digitsRow = createRow("Digits", digitsNum, { grow: true });
+    const overwrite = createToggle(st.overwrite === true, "Overwrite: On", "Overwrite: Off",
+        (v) => setState({ overwrite: v }), {
+            tooltip: "On: the next job restarts at Start and replaces the previous job's files; a " +
+                     "same-named file is replaced. Off: numbering continues after the highest number " +
+                     "already in the folder and nothing on disk is ever replaced.",
+        });
 
     const autoAdv = createToggle(st.auto_advance !== false, "Auto Advance: On", "Auto Advance: Off",
         (v) => setState({ auto_advance: v }), {
@@ -120,7 +141,7 @@ function setupNode(node) {
 
     saveSec.body.append(
         folder.el, fmtSec.el, qualityRow, optimize.el, lossless.el, preserveMeta.el,
-        renameSec.el, baseName.el, pattern.el, seqRow, autoIdx.el, padRow, autoAdv.el,
+        nameSec.el, numToggle.el, startRow, digitsRow, overwrite.el, autoAdv.el,
     );
 
     function renderSave() {
@@ -128,10 +149,9 @@ function setupNode(node) {
         const f = cur.format ?? "png";
         qualityRow.style.display = (f === "jpg" || f === "webp") ? "" : "none";
         lossless.el.style.display = f === "webp" ? "" : "none";
-        const mode = cur.rename_mode ?? "pattern";
-        pattern.el.style.display = mode === "pattern" ? "" : "none";
-        baseName.el.style.display = (mode === "base_stem" || mode === "pattern") ? "" : "none";
-        padRow.style.display = (cur.auto_index !== false) ? "" : "none";
+        const numbered = cur.number_files !== false;
+        startRow.style.display = numbered ? "" : "none";
+        digitsRow.style.display = numbered ? "" : "none";
         relayout();
     }
 
@@ -178,6 +198,7 @@ function setupNode(node) {
     // display at defaults while the real (serialized) state stays correct.
     // Same onConfigure→syncUI pattern as every other DOM-panel node in the pack.
     function syncUI() {
+        migrateNaming(node);
         const s = getState();
         folder.setValue(s.output_folder ?? "");
         fmt.setActive(s.format ?? "png");
@@ -185,12 +206,11 @@ function setupNode(node) {
         optimize.setValue(s.optimize !== false);
         lossless.setValue(s.lossless_webp === true);
         preserveMeta.setValue(s.preserve_metadata === true);
-        rename.setActive(s.rename_mode ?? "pattern");
-        baseName.setValue(s.base_name ?? "image");
-        pattern.setValue(s.rename_pattern ?? "myset");
-        seqNum.setValue(s.sequence_index ?? 0);
-        autoIdx.setValue(s.auto_index !== false);
-        padNum.setValue(s.auto_index_pad ?? 3);
+        tmpl.setValue(s.filename_template ?? "{stem}");
+        numToggle.setValue(s.number_files !== false);
+        startNum.setValue(s.start_index ?? 0);
+        digitsNum.setValue(s.digits ?? 4);
+        overwrite.setValue(s.overwrite === true);
         autoAdv.setValue(s.auto_advance !== false);
         scale.refresh();
         renderSave();
@@ -209,53 +229,24 @@ app.registerExtension({
         const _onc = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function () { _onc?.apply(this, arguments); setupNode(this); };
 
-        // Status line + folder iteration. Mirrors SaveTrainingPair's advance
-        // mechanism, with guards so it only runs for conversion wiring:
-        //  - toggle on (default), no SaveTrainingPair in the graph (it owns
-        //    iteration), a LoadImagesUniformBatch present with a known file
-        //    count, and that loader in single-image mode (uniform_batch off
-        //    or resize OFF) — batch mode already delivered every image.
+        // Status line + folder iteration. The step itself lives in
+        // umbrae_loop.js (once per finished run, shared with the other
+        // iteration nodes); this only decides whether to ask for it:
+        //  - toggle on (default), a LoadImagesUniformBatch present, and that
+        //    loader in single-image mode (uniform_batch off or resize OFF) —
+        //    batch mode already delivered every image.
         const _oe = nodeType.prototype.onExecuted;
         nodeType.prototype.onExecuted = function (message) {
             _oe?.apply(this, arguments);
             this._sisStatus?.(message);
 
             if (this.properties?.sisState?.auto_advance === false) return;
-            if (app.graph?._nodes?.some((n) => n.type === "SaveTrainingPair" || n.comfyClass === "SaveTrainingPair")) return;
-
-            const count = app._unpBatchFileCount ?? 0;
-            if (count <= 1) return;
-
-            const loader = app.graph?._nodes?.find((n) =>
-                n.type === "LoadImagesUniformBatch" ||
-                n.comfyClass === "LoadImagesUniformBatch" ||
-                n.properties?.lbuState !== undefined
-            );
+            const loader = findLoader();
             if (!loader) return;
             const ls = loader.properties?.lbuState ?? {};
             const single = !(ls.uniform_batch === true) || (ls.resize_mode ?? "LARGEST_EDGE") === "OFF";
             if (!single) return;
-
-            const idxWidget = loader.widgets?.find((w) => w.name === "image_index");
-            if (!idxWidget) return;
-
-            const widgetVal = parseInt(idxWidget.value) || 0;
-            if (app._unpCurrentIndex === undefined || widgetVal !== app._unpCurrentIndex)
-                app._unpCurrentIndex = widgetVal;
-            const current = app._unpCurrentIndex;
-
-            if (current >= count - 1) {
-                app._unpCurrentIndex = 0;
-                idxWidget.value = 0;
-                app._unpNextImageIndex = 0;
-                app._unpBatchFileCount = 0;
-                return;
-            }
-
-            app._unpCurrentIndex = current + 1;
-            app._unpNextImageIndex = current + 1;
-            idxWidget.value = current + 1;
-            setTimeout(() => app.queuePrompt(0, 1), 300);
+            requestAdvance();
         };
     },
 });
@@ -272,7 +263,7 @@ app.graphToPrompt = async function (...args) {
         const node = app.graph?._nodes?.find((n) => String(n.id) === String(id));
         if (!node) continue;
         entry.inputs = entry.inputs || {};
-        entry.inputs.ui_state = JSON.stringify(node.properties?.sisState ?? {});
+        entry.inputs.ui_state = JSON.stringify({ ...(node.properties?.sisState ?? {}), job_pos: currentJobPos() });
     }
     return result;
 };

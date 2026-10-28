@@ -1,4 +1,5 @@
 import { app } from "../../scripts/app.js";
+import { injectTheme, applyNodeColors } from "./umbrae_theme.js";
 
 const MARKER_TYPE = "UmbraeFrameMarker";
 const CTRL_TYPE   = "UmbraeFrameToggleController";
@@ -9,24 +10,24 @@ const STYLE_ID    = "umbrae-frame-toggle-styles";
 // ---------------------------------------------------------------------------
 
 function ensureStyles() {
+    injectTheme();
     if (document.getElementById(STYLE_ID)) return;
     const s = document.createElement("style");
     s.id = STYLE_ID;
     s.textContent = `
+        .ud-root.uft-root { gap: 0; }
         .uft-header {
-            color: #888;
-            font-size: 10px;
-            font-family: sans-serif;
+            color: var(--ud-accent);
+            font-size: 9px; font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: .06em;
-            padding-bottom: 4px;
+            letter-spacing: .07em;
+            padding-bottom: 6px;
             margin-bottom: 3px;
-            border-bottom: 1px solid #444;
+            border-bottom: 1px solid var(--ud-divider);
         }
         .uft-empty {
-            color: #666;
+            color: var(--ud-text-dim);
             font-size: 11px;
-            font-family: sans-serif;
             padding: 4px 2px;
         }
         .uft-row {
@@ -34,16 +35,15 @@ function ensureStyles() {
             align-items: center;
             gap: 7px;
             padding: 4px 0;
-            border-bottom: 1px solid #2a2a2a;
-            font-family: sans-serif;
-            font-size: 12px;
+            border-bottom: 1px solid var(--ud-divider);
+            font-size: 11px;
         }
         .uft-row:last-child { border-bottom: none; }
         .uft-switch {
             position: relative;
             display: inline-block;
-            width: 34px;
-            height: 18px;
+            width: 30px;
+            height: 16px;
             flex-shrink: 0;
         }
         .uft-switch input {
@@ -56,53 +56,54 @@ function ensureStyles() {
             position: absolute;
             cursor: pointer;
             inset: 0;
-            background: #555;
-            border-radius: 18px;
-            transition: background .2s;
+            background: var(--ud-inset);
+            border: 1px solid var(--ud-border);
+            border-radius: 16px;
+            transition: all .12s;
         }
         .uft-slider::before {
             content: '';
             position: absolute;
-            height: 14px;
-            width: 14px;
+            height: 10px;
+            width: 10px;
             left: 2px;
-            bottom: 2px;
-            background: #fff;
+            top: 2px;
+            background: var(--ud-text-dim);
             border-radius: 50%;
-            transition: transform .2s;
+            transition: all .12s;
         }
-        input:checked + .uft-slider           { background: #4a9; }
-        input:checked + .uft-slider::before   { transform: translateX(16px); }
+        input:checked + .uft-slider           { background: var(--ud-accent); border-color: var(--ud-accent); }
+        input:checked + .uft-slider::before   { transform: translateX(14px); background: #fff; }
         .uft-name {
             flex: 1;
-            color: #ccc;
+            color: var(--ud-text);
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
             cursor: default;
         }
-        .uft-name.muted { color: #666; text-decoration: line-through; }
+        .uft-name.muted { color: var(--ud-text-dim); text-decoration: line-through; }
         .uft-nav {
-            background: #2a2a2a;
-            border: 1px solid #555;
-            color: #8cf;
+            background: var(--ud-inset);
+            border: 1px solid var(--ud-border);
+            color: var(--ud-accent);
             cursor: pointer;
             padding: 2px 7px;
-            border-radius: 3px;
-            font-size: 13px;
+            border-radius: 4px;
+            font-size: 12px;
             flex-shrink: 0;
             line-height: 1;
+            transition: all .12s;
         }
-        .uft-nav:hover { background: #3a3a3a; border-color: #8cf; }
+        .uft-nav:hover { background: var(--ud-inset-hover); border-color: var(--ud-accent); }
         .uft-count {
-            background: #2a2a2a;
-            border: 1px solid #555;
-            color: #888;
+            background: var(--ud-inset);
+            border: 1px solid var(--ud-border);
+            color: var(--ud-text-dim);
             padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 11px;
+            border-radius: 4px;
+            font-size: 10px;
             flex-shrink: 0;
-            font-family: sans-serif;
             line-height: 1;
         }
     `;
@@ -213,9 +214,9 @@ function flyToGroup(group) {
 
 // Shared height calculation used by both onNodeCreated and _applySize
 function calcNodeHeight(rowCount) {
-    const PAD    = 12;
+    const PAD    = 16;
     const HDR    = 22;
-    const ROW    = 30;
+    const ROW    = 26;
     const EMPTY  = 22;
     const CHROME = 42;
     return (rowCount > 0 ? PAD + HDR + rowCount * ROW : PAD + EMPTY) + CHROME;
@@ -259,6 +260,7 @@ app.registerExtension({
         proto.onNodeCreated = function () {
             origCreated?.apply(this, arguments);
             ensureStyles();
+            applyNodeColors(this);
             this._toggleStates = {};
             this._lastSig      = "";
             this._lastPoll     = 0;
@@ -271,7 +273,7 @@ app.registerExtension({
 
         proto._initDOMWidget = function () {
             const container = document.createElement("div");
-            container.style.cssText = "padding:6px; width:100%; box-sizing:border-box;";
+            container.className = "ud-root uft-root";
 
             ["mousedown", "pointerdown", "touchstart"].forEach(ev =>
                 container.addEventListener(ev, e => e.stopPropagation(), { passive: false })

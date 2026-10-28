@@ -1,31 +1,53 @@
-# __init__.py — umbrae_nodes v0.8.6
+# __init__.py — umbrae_nodes v0.9.5
 # registers all umbrae custom nodes
+#
+# Layout: all code is in modules/ (modules/clause/ = wildcard clause expander,
+# modules/expander/ = wildcard expander);
+# web/ = front-end, wildcards/ + wildcard_examples/ = wildcard roots,
+# dev/ = browser harness for the UI lab, umbrae_wildcard_syntax.* = cheat sheets.
 
-from .integer_stepper import IntegerStepper
-from .list_folder_images import ListFolderImages
-from .load_images_uniform_batch import LoadImagesUniformBatch
-from .constant_image import ConstantImage1x1
-from .save_image_smart import SaveImageSmart
-from .save_image_with_name import SaveImageWithName
-from .select_image_and_name import SelectImageAndName
-from .save_training_pair import SaveTrainingPair
-from .crop_image_region import CropImageRegion
-from .simple_crop import UmbraeSimpleCrop
-from .training_prep import UmbraeTrainingPrep
-from .number_tools import MathTranslation
-from .pick_filename_by_index import PickFilenameByIndex
-from .batch_mask_ldsv_node import SaveMaskBatch, LoadMaskBatch, MaskBatchOverlay, CombineMaskBatch
-from .break_inserter_node import BreakInserter
-from .safe_string_node import SafeString
-from .latent_auto_encode_node import LatentAutoEncode
-from .frame_toggle_node import UmbraeFrameMarker, UmbraeFrameToggleController
-from .load_image_rgba import UmbraeLoadImageRGBA
-from .rgba_inpaint_nodes import UmbraeInpaintCropRGBA, UmbraeInpaintStitchRGBA
-from .umbrae_wildcard_nodes import UmbraeWildcardProcessor
-from . import umbrae_wildcard_server  # noqa: F401  (loads wildcards, registers routes + populate hook)
-from .external_loaders import (
+from .modules.integer_stepper import IntegerStepper
+from .modules.list_folder_images import ListFolderImages
+from .modules.load_images_uniform_batch import LoadImagesUniformBatch
+from .modules.constant_image import ConstantImage1x1
+from .modules.save_image_smart import SaveImageSmart
+from .modules.save_image_with_name import SaveImageWithName
+from .modules.select_image_and_name import SelectImageAndName
+from .modules.save_training_pair import SaveTrainingPair
+from .modules.crop_image_region import CropImageRegion
+from .modules.simple_crop import UmbraeSimpleCrop
+from .modules.training_prep import UmbraeTrainingPrep
+from .modules.number_tools import MathTranslation
+from .modules.pick_filename_by_index import PickFilenameByIndex
+from .modules.batch_mask_ldsv_node import SaveMaskBatch, LoadMaskBatch, MaskBatchOverlay, CombineMaskBatch
+from .modules.break_inserter_node import BreakInserter
+from .modules.safe_string_node import SafeString
+from .modules.latent_auto_encode_node import LatentAutoEncode
+from .modules.frame_toggle_node import UmbraeFrameMarker, UmbraeFrameToggleController
+from .modules.run_timer_node import UmbraeRunTimer  # v0.9.2 - frontend-only stopwatch + run history
+from .modules.load_image_rgba import UmbraeLoadImageRGBA
+from .modules.rgba_inpaint_nodes import UmbraeInpaintCropRGBA, UmbraeInpaintStitchRGBA
+from .modules.umbrae_wildcard_nodes import UmbraeWildcardProcessor
+from .modules import umbrae_wildcard_server  # noqa: F401  (loads wildcards, registers routes + populate hook)
+from .modules.clause import (   # v0.8.8 - wildcard clause expander on the umbrae engine (routes + hook)
+    NODE_CLASS_MAPPINGS as _CLAUSE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as _CLAUSE_DISPLAY_MAPPINGS,
+)
+from .modules.expander import (  # v0.9.0 - wildcard expander: batch + per-draw pins (routes)
+    NODE_CLASS_MAPPINGS as _EXPANDER_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as _EXPANDER_DISPLAY_MAPPINGS,
+)
+from .modules.external_loaders import (
     NODE_CLASS_MAPPINGS as _EXT_CLASS_MAPPINGS,
     NODE_DISPLAY_NAME_MAPPINGS as _EXT_DISPLAY_MAPPINGS,
+)
+from .modules.vlm import (  # v0.9.1 - HF VLM/LLM loader + generate under ComfyUI model management
+    NODE_CLASS_MAPPINGS as _VLM_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as _VLM_DISPLAY_MAPPINGS,
+)
+from .modules.lora_loader import (  # v0.9.3 - LoRA stack + Civitai / HF search, download, gallery info panel
+    NODE_CLASS_MAPPINGS as _LORA_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as _LORA_DISPLAY_MAPPINGS,
 )
 
 WEB_DIRECTORY = "./web"
@@ -53,6 +75,7 @@ NODE_CLASS_MAPPINGS = {
     "LatentAutoEncode": LatentAutoEncode,
     "UmbraeFrameMarker": UmbraeFrameMarker,
     "UmbraeFrameToggleController": UmbraeFrameToggleController,
+    "UmbraeRunTimer": UmbraeRunTimer,
     # v0.8.1 - RGBA load / inpaint crop / inpaint stitch
     "UmbraeLoadImageRGBA": UmbraeLoadImageRGBA,
     "UmbraeInpaintCropRGBA": UmbraeInpaintCropRGBA,
@@ -84,18 +107,35 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "LatentAutoEncode": "latent auto encode [umbrae]",
     "UmbraeFrameMarker": "frame marker [umbrae]",
     "UmbraeFrameToggleController": "frame toggle controller [umbrae]",
+    "UmbraeRunTimer": "run timer [umbrae]",
     "UmbraeLoadImageRGBA": "load image rgba [umbrae]",
     "UmbraeInpaintCropRGBA": "inpaint crop rgba [umbrae]",
     "UmbraeInpaintStitchRGBA": "inpaint stitch rgba [umbrae]",
     "UmbraeWildcardProcessor": "wildcard processor [umbrae]",
 }
 
+# ── Wildcard clause expander (v0.8.8, port of ComfyUI-WildcardClause) ────────
+NODE_CLASS_MAPPINGS.update(_CLAUSE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(_CLAUSE_DISPLAY_MAPPINGS)
+
+# ── Wildcard expander (v0.9.0: N prompts over a seed plan, pin / skip / replace any draw) ──
+NODE_CLASS_MAPPINGS.update(_EXPANDER_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(_EXPANDER_DISPLAY_MAPPINGS)
+
 # ── External loaders (integrated v57) ─────────────────────────────────────────
 NODE_CLASS_MAPPINGS.update(_EXT_CLASS_MAPPINGS)
 NODE_DISPLAY_NAME_MAPPINGS.update(_EXT_DISPLAY_MAPPINGS)
 
-# ── UI lab (DEV ONLY: do-nothing nodes for comparing panel styles; see ui_lab_node.py) ──
-from .ui_lab_node import (
+# ── VLM / LLM (v0.9.1: HF models owned by ComfyUI's memory manager; see modules/vlm/README.md) ──
+NODE_CLASS_MAPPINGS.update(_VLM_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(_VLM_DISPLAY_MAPPINGS)
+
+# ── LoRA loader (v0.9.3: stack + triggers output, Civitai / Hugging Face search + download; see modules/lora_loader/README.md) ──
+NODE_CLASS_MAPPINGS.update(_LORA_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(_LORA_DISPLAY_MAPPINGS)
+
+# ── UI lab (DEV ONLY: do-nothing nodes for comparing panel styles; see modules/ui_lab_node.py) ──
+from .modules.ui_lab_node import (
     NODE_CLASS_MAPPINGS as _LAB_CLASS_MAPPINGS,
     NODE_DISPLAY_NAME_MAPPINGS as _LAB_DISPLAY_MAPPINGS,
 )

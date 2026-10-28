@@ -176,3 +176,21 @@ export function createInfo(text = "") {
     el.textContent = text;
     return { el, setText(t) { el.textContent = t; } };
 }
+
+// ── Select (dropdown for long option lists) ──────────────────
+export function createSelect(options, value, onChange, opts = {}) {
+    const sel = document.createElement("select");
+    sel.className = "ud-select";
+    setTip(sel, opts.tooltip);
+    for (const { val, label } of options) {
+        const o = document.createElement("option");
+        o.value = String(val); o.textContent = label;
+        sel.appendChild(o);
+    }
+    const valOf = (str) => options.find((o) => String(o.val) === str)?.val;
+    sel.value = String(value);
+    sel.addEventListener("change", () => onChange && onChange(valOf(sel.value)));
+    // keep canvas shortcuts / drags from stealing the dropdown
+    for (const ev of ["mousedown", "pointerdown", "keydown"]) sel.addEventListener(ev, (e) => e.stopPropagation());
+    return { el: sel, setValue(v) { sel.value = String(v); } };
+}

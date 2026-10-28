@@ -17,6 +17,7 @@ const MODES = [
     { id: "FIT_AND_PAD",  lbl: "Fit & Pad",    tip: "Fit within W×H preserving aspect, pad with black bars." },
     { id: "CROP",         lbl: "Crop",         tip: "Scale and/or crop to W×H — configure Fill/Crop below." },
     { id: "FORCE_EXACT",  lbl: "Exact",        tip: "Stretch to exact W×H (may distort)." },
+    { id: "BBOX",         lbl: "Bbox",         tip: "Crop exactly to the connected bounding box. Min: grow the window around the box (native pixels, no upscaling) until its short edge reaches this. Max: downscale the crop so its long edge is at most this. 0 = off." },
 ];
 const DIRECTION_OPTS  = ["down", "up", "both"];
 const DIRECTION_LABEL = { down: "\u2193 Down", up: "\u2191 Up", both: "\u2195 Both" };
@@ -44,7 +45,7 @@ const ANCHOR_MODES = [
 const SCALE_DEFAULTS = {
     resize_mode: "LARGEST_EDGE", target_size: 1024, max_mp: 1.0,
     width: 1024, height: 1024, ratio_w: 1, ratio_h: 1,
-    fill: true, crop_on: true,
+    fill: true, crop_on: true, bbox_min: 0, bbox_max: 0,
     anchor_mode: "grid", anchor_grid: "center", anchor_xy: [0.5, 0.5],
     scale_direction: "down",
     torso_bias: 0.0, headroom: -0.20, face_margin_pct: 0.22,
@@ -93,8 +94,8 @@ function injectScaleCSS() {
 .us-grid { display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:3px;
     width:100%; max-width:96px; aspect-ratio:1; margin:2px auto; background:${inset}; border:1px solid ${border};
     border-radius:5px; padding:5px; box-sizing:border-box; }
-.us-cell { background:#2e2e2e; border-radius:3px; cursor:pointer; }
-.us-cell:hover { background:#3a3a3a; }
+.us-cell { background:${border}; border-radius:3px; cursor:pointer; }
+.us-cell:hover { background:${dim}; }
 .us-cell.active { background:${a}; }
 .us-batch-row { display:flex; gap:8px; }
 .us-adv-header { display:flex; align-items:center; gap:5px; cursor:pointer; user-select:none;
@@ -126,16 +127,18 @@ function sizeGroup(label, defVal, min, max, step) {
 export function buildScaleSection(node, getState, patchState, opts = {}) {
     injectTheme();
     injectScaleCSS();
-    const { onChange = () => {}, showUniform = true, isBboxConnected = () => false, seedDefaults = false } = opts;
+    const { onChange = () => {}, showUniform = true, isBboxConnected = () => false, seedDefaults = false,
+            hideModes = [], modeTitle = "Resize Mode" } = opts;
     const root = el("div", "us-root");
     const emit = () => onChange();
 
     // ── Resize Mode ──────────────────────────────────────────
     const modeSection = el("div", "us-section");
-    modeSection.append(el("div", "us-title", "Resize Mode"));
+    modeSection.append(el("div", "us-title", modeTitle));
     const modeRow = el("div", "us-chips");
     const modeChips = {};
     MODES.forEach(({ id, lbl, tip }) => {
+        if (hideModes.includes(id)) return;
         const c = el("div", "us-chip", lbl); c.title = tip;
         c.addEventListener("click", (e) => { e.stopPropagation(); patchState(node, { resize_mode: id }); refresh(); emit(); });
         modeRow.appendChild(c); modeChips[id] = c;
@@ -152,7 +155,11 @@ export function buildScaleSection(node, getState, patchState, opts = {}) {
     const szH = sizeGroup("H", 1024, 8, 8192, 8);
     const szRatioW = sizeGroup("W", 1, 1, 99, 1);
     const szRatioH = sizeGroup("H", 1, 1, 99, 1);
-    sizeRow.append(sz1.g, szMP.g, szW.g, szH.g, szRatioW.g, szRatioH.g);
+    const szBMin = sizeGroup("Min (0 = off)", 0, 0, 8192, 8);
+    szBMin.g.title = "Bbox mode: grow the crop window around the box until its short edge is at least this many source pixels. Never upscales.";
+    const szBMax = sizeGroup("Max (0 = off)", 0, 0, 8192, 8);
+    szBMax.g.title = "Bbox mode: downscale the crop so its long edge is at most this.";
+    sizeRow.append(sz1.g, szMP.g, szW.g, szH.g, szRatioW.g, szRatioH.g, szBMin.g, szBMax.g);
     sizeSection.append(sizeRow);
 
     const ratioPresetRow = el("div", "us-chips");
@@ -169,6 +176,11 @@ export function buildScaleSection(node, getState, patchState, opts = {}) {
         if (mode === "LARGEST_EDGE" || mode === "SMALLEST_EDGE") patchState(node, { target_size: Math.max(8, parseInt(sz1.i.value) || 1024) });
         else if (mode === "MAX_MP") patchState(node, { max_mp: Math.max(0.1, parseFloat(szMP.i.value) || 1.0) });
         else patchState(node, { width: Math.max(8, parseInt(szW.i.value) || 1024), height: Math.max(8, parseInt(szH.i.value) || 1024) });
+        refresh(); emit();
+    }));
+    [szBMin.i, szBMax.i].forEach((inp) => inp.addEventListener("change", (e) => {
+        e.stopPropagation();
+        patchState(node, { bbox_min: Math.max(0, parseInt(szBMin.i.value) || 0), bbox_max: Math.max(0, parseInt(szBMax.i.value) || 0) });
         refresh(); emit();
     }));
     [szRatioW.i, szRatioH.i].forEach((inp) => inp.addEventListener("change", (e) => {
@@ -321,6 +333,9 @@ export function buildScaleSection(node, getState, patchState, opts = {}) {
         szW.g.style.display = szH.g.style.display = isBoxMode ? "" : "none";
         szRatioW.g.style.display = szRatioH.g.style.display = isRatioOnly ? "" : "none";
         ratioPresetRow.style.display = isRatioOnly ? "" : "none";
+        szBMin.g.style.display = szBMax.g.style.display = mode === "BBOX" ? "" : "none";
+        szBMin.i.value = st.bbox_min ?? 0;
+        szBMax.i.value = st.bbox_max ?? 0;
         sizeSection.style.display = mode === "OFF" ? "none" : "";
 
         sz1.i.value = st.target_size ?? 1024;
@@ -354,10 +369,11 @@ export function buildScaleSection(node, getState, patchState, opts = {}) {
         dirBtn.textContent = DIRECTION_LABEL[dir] || DIRECTION_LABEL.down;
         dirBtn.classList.toggle("on", dir !== "down");
         dirBtn.title = DIRECTION_TITLE[dir] || "";
-        qSection.style.display = mode === "OFF" ? "none" : "";
+        dirBtn.style.display = mode === "BBOX" ? "none" : "";      // nothing is scaled up in Bbox mode
+        qSection.style.display = (mode === "OFF" || (mode === "BBOX" && !uniBtn)) ? "none" : "";
 
         if (uniBtn) {
-            const isAR = mode === "LARGEST_EDGE" || mode === "SMALLEST_EDGE" || mode === "MAX_MP" || (mode === "CROP" && !(fill && cropOn));
+            const isAR = mode === "LARGEST_EDGE" || mode === "SMALLEST_EDGE" || mode === "MAX_MP" || mode === "BBOX" || (mode === "CROP" && !(fill && cropOn));
             uniBtn.style.display = isAR ? "" : "none";
             const uni = st.uniform_batch === true;
             uniBtn.textContent = uni ? "Uniform: On" : "Uniform: Off";
@@ -401,6 +417,7 @@ export function computeScaledOutput(imgW, imgH, state) {
     const dir  = state.scale_direction || "down";
 
     if (mode === "OFF") return { w: imgW, h: imgH };
+    if (mode === "BBOX") return null;            // depends on the wired box
     if (mode === "SMALLEST_EDGE") {
         const t = state.target_size || 1024;
         const sm = Math.min(imgW, imgH) || 1;
