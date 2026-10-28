@@ -1,4 +1,4 @@
-# umbrae_wildcard_server.py — umbrae_nodes v0.8.9
+# umbrae_wildcard_server.py — umbrae_nodes v0.9.6
 #
 # Server side of "wildcard processor [umbrae]": HTTP routes and the queue-time
 # populate hook. Ported from Impact Pack's impact_server.py (GPL-3.0, see
@@ -184,6 +184,15 @@ def _register():
     except Exception as e:
         logging.warning(f"[umbrae wildcards] server not available ({e}); routes and populate disabled.")
         return False
+
+    if getattr(PromptServer.instance, "_umbrae_wildcard_routes", False):
+        # umbrae_nodes and the standalone umbrae_wildcards folder are both installed:
+        # the first one loaded owns the routes and the queue hook.
+        logging.warning("[umbrae wildcards] another copy of the wildcard processor (umbrae_nodes / "
+                        "umbrae_wildcards) is already installed; this copy leaves it the routes and "
+                        "the queue hook. Keep only one of them installed.")
+        return False
+    PromptServer.instance._umbrae_wildcard_routes = True
 
     routes = PromptServer.instance.routes
 

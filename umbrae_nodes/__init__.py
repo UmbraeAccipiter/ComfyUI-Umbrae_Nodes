@@ -1,4 +1,4 @@
-# __init__.py — umbrae_nodes v0.9.5
+# __init__.py — umbrae_nodes v0.9.6
 # registers all umbrae custom nodes
 #
 # Layout: all code is in modules/ (modules/clause/ = wildcard clause expander,

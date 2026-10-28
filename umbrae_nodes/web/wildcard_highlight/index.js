@@ -158,6 +158,8 @@ function registerSettings() {
 }
 
 // ── nodes ──────────────────────────────────────────────────────────────────
+if (!window.__umbraeWildcardHighlightUI) {
+window.__umbraeWildcardHighlightUI = true;
 app.registerExtension({
     name: "umbrae.wildcard_highlight",
 
@@ -191,3 +193,4 @@ app.registerExtension({
         };
     },
 });
+}

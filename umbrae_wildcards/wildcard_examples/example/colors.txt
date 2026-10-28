@@ -1,0 +1,6 @@
+# plain list: __example/colors__ picks one line. 2:: = twice the weight.
+2::blue
+teal
+olive
+crimson
+mustard yellow

@@ -389,6 +389,9 @@ function capSwitchesHeight(node, minH = 38, maxH = 76) {
 }
 
 // ── node UI ─────────────────────────────────────────────────────────────────
+// a second copy of this file (umbrae_nodes + standalone umbrae_wildcards both installed) stays idle
+if (!window.__umbraeWildcardProcessorUI) {
+window.__umbraeWildcardProcessorUI = true;
 app.registerExtension({
     name: "umbrae.WildcardProcessor",
 
@@ -496,3 +499,4 @@ app.registerExtension({
         };
     },
 });
+}

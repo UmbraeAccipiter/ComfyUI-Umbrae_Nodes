@@ -1,0 +1,7 @@
+# Recursion guard (v0.8.8). Try: __example/story__
+# This file calls itself. A line already in use on the current branch is never picked
+# again, so the chain always ends: "a hero, a villain, and the end." / "and the end." / ...
+a hero, __./story__
+a villain, __./story__
+a dragon, __./story__
+and the end.

@@ -1,0 +1,1 @@
+The crop is square, capturing the full extent of the subject. The frame leaves a small margin around its outermost visible points. Minimal surrounding negative space keeps attention on the subject. The aspect ratio is approximately [ratio]. The side boundaries leave a narrow margin around the subject.

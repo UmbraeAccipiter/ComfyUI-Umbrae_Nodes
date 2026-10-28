@@ -1,0 +1,6 @@
+# Relative tags (v0.8.8). Try: __example/portrait/portrait__
+#   __./face__      = face.txt in THIS folder          __../scene__ = scene.txt one folder up
+#   __./outfit/__   = every file under outfit/ in this folder (trailing / = folder)
+# Rename or move the portrait/ folder: these lines keep working (full-path tags would not).
+a portrait of someone with __./face__, __./outfit/__, __../scene__. [[aspect]]
+a candid shot of someone with __./face__, __./outfit/__, __../scene__. [[aspect]]

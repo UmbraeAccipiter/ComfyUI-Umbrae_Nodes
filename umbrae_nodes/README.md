@@ -50,6 +50,8 @@ unknown `__tags__`). Everything is under Settings -> Umbrae -> WildcardHighlight
 (dark preset by default, dark / light reset, a colour picker per category). It
 only draws the text differently; it never changes it. See the syntax cheat sheet.
 
+Wildcard processor on its own (v0.9.6): the repository also has a folder `umbrae_wildcards/` next to `umbrae_nodes/`: the wildcard processor [umbrae] node, its engine, the syntax colours, the cheat sheets and the shipped examples, and nothing else. Copy just that folder into `custom_nodes/` to use the processor without this pack. It is generated from the files here with a small build script (code copied byte for byte), so the two never differ. Install one or the other: if both are present, the second logs a warning and leaves the routes and queue hook to the first.
+
 Training-data pipeline (`load images batch` -> detector -> `crop image` ->
 `vlm generate` -> `training prep`): `crop image [umbrae]` emits one list item
 per crop at its native size, `vlm generate` captions each item, and `training
